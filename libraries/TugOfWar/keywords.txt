@@ -1,0 +1,5 @@
+TugOfWar	KEYWORD1
+ResetMicSample	KEYWORD2
+DoMicSample	KEYWORD2
+GetPeakToPeak	KEYWORD2
+Draw	KEYWORD2
