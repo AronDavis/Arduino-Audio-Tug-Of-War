@@ -1,8 +1,8 @@
 #ifndef TugOfWar_h
 #define TugOfWar_h
 
-#include "Arduino.h"
-#include "Adafruit_NeoPixel.h"
+#include <Arduino.h>
+#include <Adafruit_NeoPixel.h>
 
 #ifdef __AVR__
 #include <avr/power.h>
@@ -13,8 +13,8 @@
 class TugOfWar
 {
 public:
-	TugOfWar();
-	TugOfWar(int lightsDigitalPin, int micAnalogPin, uint32_t myColor, uint32_t enemyColor, uint32_t neutralColor, int numPixels);
+	TugOfWar(int lightsDigitalPin, int micAnalogPin, int numPixels);
+	void SetColors(uint32_t myColor, uint32_t enemyColor, uint32_t neutralColor);
 	void ResetMicSample();
 	void DoMicSample();
 	unsigned int GetPeakToPeak();
@@ -32,10 +32,7 @@ private:
 	unsigned int _signalMax;
 	unsigned int _signalMin;
 
-	int _sampleWindow = 10;
-	int _acceleration = 1;
-	int _currentSpeed = 0;
-	int _maxSpeed = 5;
+	int _i;
 };
 
 #endif

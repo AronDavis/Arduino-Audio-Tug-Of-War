@@ -1,26 +1,19 @@
-#include "Arduino.h"
-#include "TugOfWar.h"
-#include "Adafruit_NeoPixel.h"
+#include <Arduino.h>
+#include <TugOfWar.h>
+#include <Adafruit_NeoPixel.h>
 
-TugOfWar::TugOfWar()
+TugOfWar::TugOfWar(int lightsDigitalPin, int micAnalogPin, int numPixels)
 {
-
+	_lightsDigitalPin = lightsDigitalPin;
+	_micAnalogPin = micAnalogPin;
+	_numPixels = numPixels;
 }
 
-TugOfWar::TugOfWar(int lightsDigitalPin, int micAnalogPin, uint32_t myColor, uint32_t enemyColor, uint32_t neutralColor, int numPixels)
+void TugOfWar::SetColors(uint32_t myColor, uint32_t enemyColor, uint32_t neutralColor)
 {
-	_lightsDigitalPin = _lightsDigitalPin;
-	_micAnalogPin = _micAnalogPin;
 	_myColor = myColor;
 	_enemyColor = enemyColor;
 	_neutralColor = neutralColor;
-	_numPixels = numPixels;
-
-	// Sample window width in mS (50 mS = 20Hz)
-	_sampleWindow = 10; 
-	_acceleration = 1;
-	_currentSpeed = 0;
-	_maxSpeed = 5;
 
 	// Parameter 1 = number of pixels in strip
 	// Parameter 2 = Arduino pin number (most are valid)
@@ -36,6 +29,7 @@ TugOfWar::TugOfWar(int lightsDigitalPin, int micAnalogPin, uint32_t myColor, uin
 	//Initialize all pixels to 'off'
 	_strip.show();
 }
+
 void TugOfWar::ResetMicSample()
 {
 	_peakToPeak = 0;   // peak-to-peak level
@@ -67,13 +61,15 @@ void TugOfWar::DoMicSample()
 unsigned int TugOfWar::GetPeakToPeak()
 {
 	_peakToPeak = _signalMax - _signalMin;
+
+	return _peakToPeak;
 }
 
 void TugOfWar::Draw(int currentPos, int goalPostDistance)
 {
 	_strip.clear();
-
-	for (int i = 0 ; i < currentPos; i++)
+	
+	for (int i = 0; i < currentPos; i++)
 		_strip.setPixelColor(i, _myColor);
 
 	_strip.setPixelColor(currentPos, _neutralColor);
@@ -87,4 +83,7 @@ void TugOfWar::Draw(int currentPos, int goalPostDistance)
 	_strip.setPixelColor(mid - goalPostDistance, _neutralColor);
 
 	_strip.show();
+
+	_i++;
+	_i %= 255;
 }

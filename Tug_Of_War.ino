@@ -2,37 +2,49 @@
 #include <TugOfWar.h>
 
 #define D_PIN_RED 6
-#define D_PIN_BLUE 7
-#define A_PIN_RED 0
-#define A_PIN_BLUE 1
-#define NUM_PIXELS 120
-#define ORIGINAL_GOAL_POST_DISTANCE 20
+#define D_PIN_BLUE 5
+#define A_PIN_RED 5
+#define A_PIN_BLUE 0
+#define NUM_PIXELS 20
+#define ORIGINAL_GOAL_POST_DISTANCE 4
 
-TugOfWar _redTeam;
-TugOfWar _blueTeam;
+TugOfWar _redTeam = TugOfWar(D_PIN_RED, A_PIN_RED, NUM_PIXELS);
+TugOfWar _blueTeam = TugOfWar(D_PIN_BLUE, A_PIN_BLUE, NUM_PIXELS);
 
 const int _sampleWindow = 10; // Sample window width in mS (50 mS = 20Hz)
 
 int _currentPos = 0;
 int _acceleration = 1;
 int _currentSpeed = 0;
-int _maxSpeed = 5;
+int _maxSpeed = 1;
 
 int _goalPostDistance = ORIGINAL_GOAL_POST_DISTANCE;
 
+int _mode = 0;
+
 void setup() {
   Serial.begin(9600);
-
+  
   uint32_t redColor = Adafruit_NeoPixel::Color(255,0,0);
   uint32_t blueColor = Adafruit_NeoPixel::Color(0,0,255);
   uint32_t neutralColor = Adafruit_NeoPixel::Color(255,255,255);
-  _redTeam = TugOfWar(D_PIN_RED, A_PIN_RED, redColor, blueColor, neutralColor, NUM_PIXELS);
-  _blueTeam = TugOfWar(D_PIN_BLUE, A_PIN_BLUE, blueColor, redColor, neutralColor, NUM_PIXELS);
+  _redTeam.SetColors(redColor, blueColor, neutralColor);
+  _blueTeam.SetColors(blueColor, redColor, neutralColor);
+
+  _currentPos = NUM_PIXELS / 2;
 }
 
 void loop() {
-  unsigned long startMillis = millis(); // Start of sample window
+  if(_mode == 0)
+    gameMode();
+  else if(_mode == 1)
+    endScreenMode();
+}
 
+void gameMode()
+{  
+  unsigned long startMillis = millis(); // Start of sample window
+  
   _redTeam.ResetMicSample();
   _blueTeam.ResetMicSample();
 
@@ -47,22 +59,24 @@ void loop() {
 
   int teamDiff = redPeakToPeak - bluePeakToPeak;
 
-  if(teamDiff > 0) //red is winning
+  //Serial.println(teamDiff);
+
+  int deadZone = 200;
+  if(teamDiff < deadZone && teamDiff > -deadZone) //tie
+  {
+    //TODO: shrink goal posts every time there's a tie
+    if (_currentSpeed < 0)
+      _currentSpeed += _acceleration;
+    else if (_currentSpeed > 0)
+      _currentSpeed -= _acceleration;
+  } 
+  else if(teamDiff > 0) //red is winning
   {
     _currentSpeed += _acceleration;
   }
   else if(teamDiff < 0) //blue is winning
   {
     _currentSpeed -= _acceleration;
-  }
-  else //tie
-  {
-    //TODO: shrink goal posts every time there's a tie
-    
-    if (_currentSpeed < 0)
-      _currentSpeed += _acceleration;
-    else if (_currentSpeed > 0)
-      _currentSpeed -= _acceleration;
   }
 
   _currentSpeed = constrain(_currentSpeed, -_maxSpeed, _maxSpeed);
@@ -74,9 +88,31 @@ void loop() {
 
   //Serial.println(_currentPos);
 
-  //TODO: if goal post has been crossed, end game
+  return;
+
+  int mid = NUM_PIXELS / 2;
+
+  //TODO: maybe base goal posts from start and end instead of mid to we get consistency
   
-  delay(50);
+  if(_currentPos >= mid + _goalPostDistance || _currentPos <= mid - _goalPostDistance)
+    _mode = 1;
+}
+
+void endScreenMode()
+{
+  int mid = NUM_PIXELS / 2;
+  
+  //if red won
+  if(_currentPos >= mid + _goalPostDistance)
+  {
+    
+  }
+  else if(_currentPos <= mid - _goalPostDistance) //if blue won
+  {
+    
+  }
+
+  delay(_sampleWindow);
 }
 
 /*
