@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <TugOfWar.h>
+#include <MyColor.h>
 #include <Adafruit_NeoPixel.h>
 
 TugOfWar::TugOfWar(int lightsDigitalPin, int micAnalogPin, int numPixels)
@@ -86,4 +87,15 @@ void TugOfWar::Draw(int currentPos, int goalPostDistance)
 
 	_i++;
 	_i %= 255;
+}
+
+void TugOfWar::DrawBuffer(MyColor buffer[])
+{
+	for (int i = 0; i < _numPixels; i++)
+	{
+		MyColor c = buffer[i];
+		_strip.setPixelColor(i, Adafruit_NeoPixel::Color(c.R(), c.G(), c.B()));
+	}
+
+	_strip.show();
 }

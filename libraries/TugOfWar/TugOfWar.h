@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
+#include <MyColor.h>
 
 #ifdef __AVR__
 #include <avr/power.h>
@@ -19,6 +20,7 @@ public:
 	void DoMicSample();
 	unsigned int GetPeakToPeak();
 	void Draw(int currentPos, int goalPostDistance);
+	void DrawBuffer(MyColor buffer[]);
 private:
 	int _lightsDigitalPin;
 	int _micAnalogPin;

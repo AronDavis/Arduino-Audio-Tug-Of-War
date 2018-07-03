@@ -1,5 +1,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <TugOfWar.h>
+#include <Paddle.h>
+#include <MyColor.h>
 
 #define D_PIN_RED 6
 #define D_PIN_BLUE 5
@@ -8,10 +10,28 @@
 #define NUM_PIXELS 20
 #define ORIGINAL_GOAL_POST_DISTANCE 4
 
+#define WAITING_MODE 0
+#define TRANSITION_TO_GAME_MODE 1
+#define GAME_MODE 2
+#define TRANSITION_TO_END_MODE 3
+#define END_MODE 3
+
 TugOfWar _redTeam = TugOfWar(D_PIN_RED, A_PIN_RED, NUM_PIXELS);
 TugOfWar _blueTeam = TugOfWar(D_PIN_BLUE, A_PIN_BLUE, NUM_PIXELS);
 
+Paddle _redPaddle = Paddle(NUM_PIXELS);
+Paddle _bluePaddle = Paddle(NUM_PIXELS);
+
+MyColor _redColor = MyColor(255, 0, 0);
+MyColor _blueColor = MyColor(0, 0, 255);
+MyColor _neutralColor = MyColor(255, 255, 255);
+
+MyColor _redBuffer [NUM_PIXELS] = {};
+MyColor _blueBuffer [NUM_PIXELS] = {};
+
 const int _sampleWindow = 10; // Sample window width in mS (50 mS = 20Hz)
+
+const int _transitionToGameDuration = 3000;
 
 int _currentPos = 0;
 int _acceleration = 1;
@@ -35,10 +55,80 @@ void setup() {
 }
 
 void loop() {
-  if(_mode == 0)
-    gameMode();
-  else if(_mode == 1)
-    endScreenMode();
+
+  switch(_mode)
+  {
+    case WAITING_MODE:
+      waitingMode();
+      break;
+    case TRANSITION_TO_GAME_MODE:
+      transitionToGameMode();
+      break;
+    case GAME_MODE:
+      gameMode();
+    case END_MODE:
+      endScreenMode();
+  }
+}
+
+void switchMode(int mode)
+{
+  resetBuffers();
+  _mode = mode;
+}
+
+void waitingMode()
+{
+  //TODO: blink to start?
+  
+  resetBuffers();
+  
+  unsigned long startMillis = millis(); // Start of sample window
+  
+  _redTeam.ResetMicSample();
+  _blueTeam.ResetMicSample();
+
+  while (millis() - startMillis < _sampleWindow)
+  {
+    _redTeam.DoMicSample();
+    _blueTeam.DoMicSample();
+  }
+
+  int redPeakToPeak = _redTeam.GetPeakToPeak();
+  int bluePeakToPeak = _blueTeam.GetPeakToPeak();
+
+  int redPos = _redPaddle.UpdatePos(redPeakToPeak);
+  int bluePos = _bluePaddle.UpdatePos(bluePeakToPeak);
+  
+  _redPaddle.WriteToBuffer(_blueBuffer, _redColor, false);
+  _bluePaddle.WriteToBuffer(_redBuffer, _blueColor, false);
+
+  _redPaddle.WriteToBuffer(_redBuffer, _redColor, true);
+  _bluePaddle.WriteToBuffer(_blueBuffer, _blueColor, true);
+  
+  drawBuffers();
+
+  if(redPos == NUM_PIXELS - 1 && bluePos == NUM_PIXELS - 1)
+  {
+    switchMode(TRANSITION_TO_GAME_MODE);
+  }
+}
+
+void transitionToGameMode()
+{
+  unsigned long startMillis = millis(); // Start of sample window
+
+  while (millis() - startMillis < _transitionToGameDuration)
+  {
+    resetBuffers();
+    _redPaddle.UpdateWave();
+    _redPaddle.WriteToBuffer(_redBuffer, _neutralColor, true);
+    _redPaddle.WriteToBuffer(_blueBuffer, _neutralColor, true);
+    drawBuffers();
+    delay(_sampleWindow);
+  }
+
+  switchMode(GAME_MODE);
 }
 
 void gameMode()
@@ -95,7 +185,7 @@ void gameMode()
   //TODO: maybe base goal posts from start and end instead of mid to we get consistency
   
   if(_currentPos >= mid + _goalPostDistance || _currentPos <= mid - _goalPostDistance)
-    _mode = 1;
+    switchMode(TRANSITION_TO_END_MODE);
 }
 
 void endScreenMode()
@@ -113,6 +203,21 @@ void endScreenMode()
   }
 
   delay(_sampleWindow);
+}
+
+void resetBuffers()
+{
+  for(int i = 0; i < NUM_PIXELS; i++)
+  {
+    _redBuffer[i].Reset();
+    _blueBuffer[i].Reset();
+  }
+}
+
+void drawBuffers()
+{
+  _redTeam.DrawBuffer(_redBuffer);
+  _blueTeam.DrawBuffer(_blueBuffer);
 }
 
 /*
