@@ -10,7 +10,7 @@ TugOfWar::TugOfWar(int lightsDigitalPin, int micAnalogPin, int numPixels)
 	_numPixels = numPixels;
 }
 
-void TugOfWar::SetColors(uint32_t myColor, uint32_t enemyColor, uint32_t neutralColor)
+void TugOfWar::SetColors(MyColor myColor, MyColor enemyColor, MyColor neutralColor)
 {
 	_myColor = myColor;
 	_enemyColor = enemyColor;
@@ -66,27 +66,21 @@ unsigned int TugOfWar::GetPeakToPeak()
 	return _peakToPeak;
 }
 
-void TugOfWar::Draw(int currentPos, int goalPostDistance)
+void TugOfWar::WriteToBuffer(MyColor buffer[], int currentPos, int goalPostDistance)
 {
-	_strip.clear();
-	
-	for (int i = 0; i < currentPos; i++)
-		_strip.setPixelColor(i, _myColor);
+	for (int i = 0; i <= goalPostDistance; i++)
+		buffer[i].Set(_neutralColor);
 
-	_strip.setPixelColor(currentPos, _neutralColor);
+	for (int i = goalPostDistance + 1; i < currentPos; i++)
+		buffer[i].Set(_myColor);
 
-	for (int i = currentPos + 1; i < _numPixels - 1; i++)
-		_strip.setPixelColor(i, _enemyColor);
+	buffer[currentPos].Set(_neutralColor);
 
-	int mid = _numPixels / 2;
+	for (int i = currentPos + 1; i < (_numPixels - 1) - goalPostDistance; i++)
+		buffer[i].Set(_enemyColor);
 
-	_strip.setPixelColor(mid + goalPostDistance, _neutralColor);
-	_strip.setPixelColor(mid - goalPostDistance, _neutralColor);
-
-	_strip.show();
-
-	_i++;
-	_i %= 255;
+	for (int i = (_numPixels - 1) - goalPostDistance; i < _numPixels - 1; i++)
+		buffer[i].Set(_neutralColor);
 }
 
 void TugOfWar::DrawBuffer(MyColor buffer[])

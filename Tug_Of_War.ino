@@ -7,14 +7,14 @@
 #define D_PIN_BLUE 5
 #define A_PIN_RED 5
 #define A_PIN_BLUE 0
-#define NUM_PIXELS 20
-#define ORIGINAL_GOAL_POST_DISTANCE 4
+#define NUM_PIXELS 120
+#define ORIGINAL_GOAL_POST_DISTANCE 5
 
 #define WAITING_MODE 0
 #define TRANSITION_TO_GAME_MODE 1
 #define GAME_MODE 2
 #define TRANSITION_TO_END_MODE 3
-#define END_MODE 3
+#define END_MODE 4
 
 TugOfWar _redTeam = TugOfWar(D_PIN_RED, A_PIN_RED, NUM_PIXELS);
 TugOfWar _blueTeam = TugOfWar(D_PIN_BLUE, A_PIN_BLUE, NUM_PIXELS);
@@ -31,27 +31,30 @@ MyColor _blueBuffer [NUM_PIXELS] = {};
 
 const int _sampleWindow = 10; // Sample window width in mS (50 mS = 20Hz)
 
-const int _transitionToGameDuration = 3000;
+const int _transitionToGameDuration = 2000;
+const int _blinkSpeed = 200; 
+const int _audioBarDuration = 10000;
 
-int _currentPos = 0;
-int _acceleration = 1;
-int _currentSpeed = 0;
-int _maxSpeed = 1;
+int _currentPos;
+int _acceleration;
+int _currentSpeed;
+int _maxSpeed;
+int _goalPostDistance;
 
-int _goalPostDistance = ORIGINAL_GOAL_POST_DISTANCE;
+int _redWins = 0;
+int _blueWins = 0;
+
+
 
 int _mode = 0;
 
 void setup() {
   Serial.begin(9600);
   
-  uint32_t redColor = Adafruit_NeoPixel::Color(255,0,0);
-  uint32_t blueColor = Adafruit_NeoPixel::Color(0,0,255);
-  uint32_t neutralColor = Adafruit_NeoPixel::Color(255,255,255);
-  _redTeam.SetColors(redColor, blueColor, neutralColor);
-  _blueTeam.SetColors(blueColor, redColor, neutralColor);
+  _redTeam.SetColors(_redColor, _blueColor, _neutralColor);
+  _blueTeam.SetColors(_blueColor, _redColor, _neutralColor);
 
-  _currentPos = NUM_PIXELS / 2;
+  resetGame();
 }
 
 void loop() {
@@ -66,15 +69,46 @@ void loop() {
       break;
     case GAME_MODE:
       gameMode();
+      break;
+    case TRANSITION_TO_END_MODE:
+      transitionToEndMode();
+      break;
     case END_MODE:
       endScreenMode();
+      break;
   }
+}
+
+void resetGame()
+{
+  _currentPos = NUM_PIXELS / 2;
+  _acceleration = 1;
+  _currentSpeed = 0;
+  _maxSpeed = 1;
+  _goalPostDistance = ORIGINAL_GOAL_POST_DISTANCE;
 }
 
 void switchMode(int mode)
 {
   resetBuffers();
   _mode = mode;
+
+  switch(_mode)
+  {
+    case WAITING_MODE:
+      _redPaddle.Reset();
+      _bluePaddle.Reset();
+      break;
+    case TRANSITION_TO_GAME_MODE:
+      break;
+    case GAME_MODE:
+      resetGame();
+      break;
+    case TRANSITION_TO_END_MODE:
+      break;
+    case END_MODE:
+      break;
+  }
 }
 
 void waitingMode()
@@ -97,6 +131,12 @@ void waitingMode()
   int redPeakToPeak = _redTeam.GetPeakToPeak();
   int bluePeakToPeak = _blueTeam.GetPeakToPeak();
 
+  /*
+  Serial.print(bluePeakToPeak);
+  Serial.print(",");
+  Serial.println(redPeakToPeak);
+  */
+  
   int redPos = _redPaddle.UpdatePos(redPeakToPeak);
   int bluePos = _bluePaddle.UpdatePos(bluePeakToPeak);
   
@@ -128,6 +168,8 @@ void transitionToGameMode()
     delay(_sampleWindow);
   }
 
+  //TODO: flash tug of war first
+
   switchMode(GAME_MODE);
 }
 
@@ -149,10 +191,19 @@ void gameMode()
 
   int teamDiff = redPeakToPeak - bluePeakToPeak;
 
-  //Serial.println(teamDiff);
-
+  /*
+  Serial.print(bluePeakToPeak);
+  Serial.print(",");
+  Serial.print(redPeakToPeak);
+  Serial.print(",");
+  Serial.println(teamDiff);
+  */
+  
   int deadZone = 200;
-  if(teamDiff < deadZone && teamDiff > -deadZone) //tie
+  int diffTolerance = 50;
+  int mid = NUM_PIXELS / 2;
+  
+  if(teamDiff < diffTolerance && teamDiff > -diffTolerance) //tie
   {
     //TODO: shrink goal posts every time there's a tie
     if (_currentSpeed < 0)
@@ -171,38 +222,81 @@ void gameMode()
 
   _currentSpeed = constrain(_currentSpeed, -_maxSpeed, _maxSpeed);
   _currentPos += _currentSpeed;
-  _currentPos = constrain(_currentPos, 0, NUM_PIXELS - 1);
+  _currentPos = constrain(_currentPos, _goalPostDistance, (NUM_PIXELS - 1) - _goalPostDistance);
 
-  _redTeam.Draw(_currentPos, _goalPostDistance);
-  _blueTeam.Draw((NUM_PIXELS - 1) - _currentPos, _goalPostDistance);
+  resetBuffers();
+  _redTeam.WriteToBuffer(_redBuffer, _currentPos, _goalPostDistance);
+  _blueTeam.WriteToBuffer(_blueBuffer, (NUM_PIXELS - 1) - _currentPos, _goalPostDistance);
+  drawBuffers();
 
-  //Serial.println(_currentPos);
-
-  return;
-
-  int mid = NUM_PIXELS / 2;
-
-  //TODO: maybe base goal posts from start and end instead of mid to we get consistency
-  
-  if(_currentPos >= mid + _goalPostDistance || _currentPos <= mid - _goalPostDistance)
+  //TODO: maybe base goal posts from start and end instead of mid so we get consistency
+  if(_currentPos >= (NUM_PIXELS - 1) - _goalPostDistance || _currentPos <= _goalPostDistance)
     switchMode(TRANSITION_TO_END_MODE);
 }
 
-void endScreenMode()
+void transitionToEndMode()
 {
-  int mid = NUM_PIXELS / 2;
-  
-  //if red won
-  if(_currentPos >= mid + _goalPostDistance)
+  unsigned long startMillis = millis(); // Start of sample window
+
+  bool redWon = (_currentPos >= (NUM_PIXELS - 1) - _goalPostDistance);
+
+  while (millis() - startMillis < _transitionToGameDuration)
   {
-    
+    resetBuffers();
+    _redTeam.WriteToBuffer(_redBuffer, _currentPos, _goalPostDistance);
+    _blueTeam.WriteToBuffer(_blueBuffer, (NUM_PIXELS - 1) - _currentPos, _goalPostDistance);
+    drawBuffers();
+    delay(_blinkSpeed);
+
+    resetBuffers();
+    drawBuffers();
+    delay(_blinkSpeed);
   }
-  else if(_currentPos <= mid - _goalPostDistance) //if blue won
+  
+  switchMode(END_MODE);
+}
+
+
+void endScreenMode()
+{ 
+  unsigned long startMillis = millis();
+ 
+  while (millis() - startMillis < _audioBarDuration)
   {
+    _redTeam.ResetMicSample();
+    _blueTeam.ResetMicSample();
+
+    unsigned long startSampleMillis = millis();
+    while (millis() - startSampleMillis < _sampleWindow)
+    {
+      _redTeam.DoMicSample();
+      _blueTeam.DoMicSample();
+    }
     
+    int redPeakToPeak = _redTeam.GetPeakToPeak();
+    int bluePeakToPeak = _blueTeam.GetPeakToPeak();
+    
+    // map to the max scale of the display
+    int redLightsToShow = map(redPeakToPeak , 0, 600, 0, (NUM_PIXELS / 2) + 1);
+    int blueLightsToShow = map(bluePeakToPeak , 0, 600, 0, (NUM_PIXELS / 2) + 1);
+    
+    resetBuffers();
+    for(int i = 0; i < redLightsToShow; i++)
+    {
+      _redBuffer[i].Add(_redColor);
+      _blueBuffer[(NUM_PIXELS - 1) - i].Add(_redColor);
+    }
+    
+    for(int i = 0; i < blueLightsToShow; i++)
+    {
+      _blueBuffer[i].Add(_blueColor);
+      _redBuffer[(NUM_PIXELS - 1) - i].Add(_blueColor);
+    }
+    
+    drawBuffers(); 
   }
 
-  delay(_sampleWindow);
+  switchMode(WAITING_MODE);
 }
 
 void resetBuffers()
@@ -219,90 +313,3 @@ void drawBuffers()
   _redTeam.DrawBuffer(_redBuffer);
   _blueTeam.DrawBuffer(_blueBuffer);
 }
-
-/*
-// Fill the dots one after the other with a color
-void colorWipe(uint32_t c, uint8_t wait) {
-  for (uint16_t i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, c);
-    strip.show();
-    delay(wait);
-  }
-}
-
-void rainbow(uint8_t wait) {
-  uint16_t i, j;
-
-  for (j = 0; j < 256; j++) {
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel((i + j) & 255));
-    }
-    strip.show();
-    delay(wait);
-  }
-}
-
-// Slightly different, this makes the rainbow equally distributed throughout
-void rainbowCycle(uint8_t wait) {
-  uint16_t i, j;
-
-  for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
-    }
-    strip.show();
-    delay(wait);
-  }
-}
-
-//Theatre-style crawling lights.
-void theaterChase(uint32_t c, uint8_t wait) {
-  for (int j = 0; j < 10; j++) { //do 10 cycles of chasing
-    for (int q = 0; q < 3; q++) {
-      for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, c);  //turn every third pixel on
-      }
-      strip.show();
-
-      delay(wait);
-
-      for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, 0);      //turn every third pixel off
-      }
-    }
-  }
-}
-
-//Theatre-style crawling lights with rainbow effect
-void theaterChaseRainbow(uint8_t wait) {
-  for (int j = 0; j < 256; j++) {   // cycle all 256 colors in the wheel
-    for (int q = 0; q < 3; q++) {
-      for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, Wheel( (i + j) % 255)); //turn every third pixel on
-      }
-      strip.show();
-
-      delay(wait);
-
-      for (uint16_t i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, 0);      //turn every third pixel off
-      }
-    }
-  }
-}
-
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-  WheelPos = 255 - WheelPos;
-  if (WheelPos < 85) {
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
-  }
-  if (WheelPos < 170) {
-    WheelPos -= 85;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
-  }
-  WheelPos -= 170;
-  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
-}
-*/

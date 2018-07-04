@@ -15,18 +15,18 @@ class TugOfWar
 {
 public:
 	TugOfWar(int lightsDigitalPin, int micAnalogPin, int numPixels);
-	void SetColors(uint32_t myColor, uint32_t enemyColor, uint32_t neutralColor);
+	void SetColors(MyColor myColor, MyColor enemyColor, MyColor neutralColor);
 	void ResetMicSample();
 	void DoMicSample();
 	unsigned int GetPeakToPeak();
-	void Draw(int currentPos, int goalPostDistance);
+	void WriteToBuffer(MyColor buffer[], int currentPos, int goalPostDistance);
 	void DrawBuffer(MyColor buffer[]);
 private:
 	int _lightsDigitalPin;
 	int _micAnalogPin;
-	uint32_t _myColor;
-	uint32_t _enemyColor;
-	uint32_t _neutralColor;
+	MyColor _myColor;
+	MyColor _enemyColor;
+	MyColor _neutralColor;
 	int _numPixels;
 	Adafruit_NeoPixel _strip;
 
